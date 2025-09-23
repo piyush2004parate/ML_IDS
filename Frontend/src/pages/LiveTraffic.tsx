@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DataTable } from '../components/UI/DataTable';
 import { NetworkTraffic } from '../types';
 import { format } from 'date-fns';
-import { RefreshCw, Play, Pause } from 'lucide-react';
+import { Play, Pause } from 'lucide-react';
 
 export const LiveTraffic: React.FC = () => {
   const [traffic, setTraffic] = useState<NetworkTraffic[]>([]);
@@ -10,18 +10,15 @@ export const LiveTraffic: React.FC = () => {
   const [lastUpdate, setLastUpdate] = useState(new Date());
 
   useEffect(() => {
-    // The URL for your Django Channels WebSocket
     const ws = new WebSocket('ws://127.0.0.1:8000/ws/traffic/');
 
     ws.onopen = () => {
       console.log('WebSocket connected');
     };
 
-    // This function is called whenever a message is received from the server
     ws.onmessage = (event) => {
       if (!isPaused) {
-        const newTrafficData = JSON.parse(event.data);
-        // Add the new data to the top of the list, and keep the list from growing too large
+        const newTrafficData: NetworkTraffic = JSON.parse(event.data);
         setTraffic(prevTraffic => [newTrafficData, ...prevTraffic.slice(0, 99)]);
         setLastUpdate(new Date());
       }
@@ -35,11 +32,10 @@ export const LiveTraffic: React.FC = () => {
       console.error('WebSocket error:', error);
     };
 
-    // Clean up the connection when the component unmounts
     return () => {
       ws.close();
     };
-  }, [isPaused]); // The dependency array ensures the effect can react to the paused state
+  }, [isPaused]);
 
   const getStatusBadge = (status: NetworkTraffic['status']) => {
     const colors = {

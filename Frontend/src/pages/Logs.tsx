@@ -1,17 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { DataTable } from '../components/UI/DataTable';
 import { LogEntry } from '../types';
-import { mockLogs } from '../data/mockData';
 import { format } from 'date-fns';
-import { Download, Filter, Calendar } from 'lucide-react';
+import { Download, Calendar } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 
 export const Logs: React.FC = () => {
-  const [logs, setLogs] = useState<LogEntry[]>(mockLogs);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [severityFilter, setSeverityFilter] = useState('all');
   const [actionFilter, setActionFilter] = useState('all');
   const { showToast } = useToast();
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        const response = await axios.get<LogEntry[]>('http://127.0.0.1:8000/api/logs/');
+        setLogs(response.data);
+      } catch (error) {
+        console.error("Failed to fetch logs:", error);
+        showToast('error', 'Could not load log data.');
+      }
+    };
+
+    fetchLogs();
+  }, [showToast]);
 
   const getSeverityBadge = (severity: LogEntry['severity']) => {
     const colors = {
@@ -44,9 +58,9 @@ export const Logs: React.FC = () => {
     const headers = ['Timestamp', 'Action', 'Target', 'Result', 'Severity', 'Details'];
     const csvContent = [
       headers.join(','),
-      ...logs.map(log =>
+      ...filteredLogs.map(log =>
         [
-          format(log.timestamp, 'yyyy-MM-dd HH:mm:ss'),
+          format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss'),
           log.action,
           log.target,
           log.result,
@@ -70,10 +84,11 @@ export const Logs: React.FC = () => {
   };
 
   const filteredLogs = logs.filter(log => {
+    const logDate = new Date(log.timestamp);
     if (severityFilter !== 'all' && log.severity !== severityFilter) return false;
     if (actionFilter !== 'all' && log.action !== actionFilter) return false;
-    if (dateRange.start && log.timestamp < new Date(dateRange.start)) return false;
-    if (dateRange.end && log.timestamp > new Date(dateRange.end)) return false;
+    if (dateRange.start && logDate < new Date(dateRange.start)) return false;
+    if (dateRange.end && logDate > new Date(dateRange.end)) return false;
     return true;
   });
 
@@ -81,7 +96,7 @@ export const Logs: React.FC = () => {
     {
       key: 'timestamp' as keyof LogEntry,
       header: 'Timestamp',
-      render: (item: LogEntry) => format(item.timestamp, 'MMM dd, HH:mm:ss'),
+      render: (item: LogEntry) => format(new Date(item.timestamp), 'MMM dd, HH:mm:ss'),
       sortable: true,
     },
     {
@@ -208,7 +223,7 @@ export const Logs: React.FC = () => {
             <div className="flex justify-between">
               <span className="text-gray-400">Success Rate</span>
               <span className="text-green-400 font-semibold">
-                {Math.round((logs.filter(l => l.result === 'Success').length / logs.length) * 100)}%
+                {logs.length > 0 ? Math.round((logs.filter(l => l.result === 'Success').length / logs.length) * 100) : 0}%
               </span>
             </div>
             <div className="flex justify-between">
@@ -241,7 +256,7 @@ export const Logs: React.FC = () => {
               <div key={log.id} className="border-l-2 border-cyan-400 pl-3">
                 <p className="text-sm text-white">{log.action}</p>
                 <p className="text-xs text-gray-400">
-                  {format(log.timestamp, 'MMM dd, HH:mm')}
+                  {format(new Date(log.timestamp), 'MMM dd, HH:mm')}
                 </p>
               </div>
             ))}

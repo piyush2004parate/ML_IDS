@@ -1,43 +1,68 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { DataTable } from '../components/UI/DataTable';
 import { ResponseRule } from '../types';
-import { mockResponseRules } from '../data/mockData';
 import { format } from 'date-fns';
 import { ToggleLeft, ToggleRight, Plus, Trash2, RotateCcw, Shield } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 
 export const AutomatedResponse: React.FC = () => {
-  const [rules, setRules] = useState<ResponseRule[]>(mockResponseRules);
+  const [rules, setRules] = useState<ResponseRule[]>([]);
   const [autoResponseEnabled, setAutoResponseEnabled] = useState(true);
-  const [whitelistIps, setWhitelistIps] = useState(['192.168.1.1', '10.0.0.1', '172.16.0.1']);
+  const [whitelistIps, setWhitelistIps] = useState<string[]>([]);
   const [newWhitelistIp, setNewWhitelistIp] = useState('');
   const { showToast } = useToast();
 
-  const toggleRule = (ruleId: string) => {
-    setRules(prev =>
-      prev.map(rule =>
-        rule.id === ruleId ? { ...rule, isActive: !rule.isActive } : rule
-      )
-    );
-    const rule = rules.find(r => r.id === ruleId);
-    if (rule) {
-      showToast('success', `Rule "${rule.name}" ${rule.isActive ? 'disabled' : 'enabled'}`);
+  useEffect(() => {
+    const fetchRules = async () => {
+      try {
+        const response = await axios.get<ResponseRule[]>('http://127.0.0.1:8000/api/rules/');
+        setRules(response.data);
+      } catch (error) {
+        console.error("Failed to fetch rules:", error);
+        showToast('error', 'Could not load response rules.');
+      }
+    };
+    fetchRules();
+  }, [showToast]);
+
+  const toggleRule = async (ruleId: string) => {
+    const ruleToUpdate = rules.find(r => r.id === ruleId);
+    if (!ruleToUpdate) return;
+    try {
+      const newStatus = !ruleToUpdate.is_active;
+      await axios.patch(`http://127.0.0.1:8000/api/rules/${ruleId}/`, { is_active: newStatus });
+      setRules(prev =>
+        prev.map(rule =>
+          rule.id === ruleId ? { ...rule, is_active: newStatus } : rule
+        )
+      );
+      showToast('success', `Rule "${ruleToUpdate.name}" ${newStatus ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      console.error(`Failed to toggle rule status:`, error);
+      showToast('error', 'Could not update rule status.');
     }
   };
 
-  const handleRollback = (ruleId: string) => {
-    const rule = rules.find(r => r.id === ruleId);
-    if (rule) {
-      showToast('success', `Rolled back ${rule.triggeredCount} actions for "${rule.name}"`);
+  const handleRollback = async (ruleId: string) => {
+    const ruleToUpdate = rules.find(r => r.id === ruleId);
+    if (!ruleToUpdate || ruleToUpdate.triggered_count === 0) return;
+    try {
+      await axios.patch(`http://127.0.0.1:8000/api/rules/${ruleId}/`, { triggered_count: 0 });
       setRules(prev =>
         prev.map(r =>
-          r.id === ruleId ? { ...r, triggeredCount: 0 } : r
+          r.id === ruleId ? { ...r, triggered_count: 0 } : r
         )
       );
+      showToast('success', `Rolled back ${ruleToUpdate.triggered_count} actions for "${ruleToUpdate.name}"`);
+    } catch (error) {
+      console.error(`Failed to rollback actions:`, error);
+      showToast('error', 'Could not rollback actions.');
     }
   };
 
   const addWhitelistIp = () => {
+    // You would need to implement a backend endpoint for this
     if (newWhitelistIp && !whitelistIps.includes(newWhitelistIp)) {
       setWhitelistIps(prev => [...prev, newWhitelistIp]);
       setNewWhitelistIp('');
@@ -46,6 +71,7 @@ export const AutomatedResponse: React.FC = () => {
   };
 
   const removeWhitelistIp = (ip: string) => {
+    // And an endpoint for this as well
     setWhitelistIps(prev => prev.filter(i => i !== ip));
     showToast('info', `Removed ${ip} from whitelist`);
   };
@@ -88,35 +114,35 @@ export const AutomatedResponse: React.FC = () => {
       sortable: true,
     },
     {
-      key: 'isActive' as keyof ResponseRule,
+      key: 'is_active' as keyof ResponseRule,
       header: 'Status',
       render: (item: ResponseRule) => (
         <button
           onClick={() => toggleRule(item.id)}
           className="flex items-center space-x-2 text-sm"
         >
-          {item.isActive ? (
+          {item.is_active ? (
             <ToggleRight className="h-5 w-5 text-green-400" />
           ) : (
             <ToggleLeft className="h-5 w-5 text-gray-400" />
           )}
-          <span className={item.isActive ? 'text-green-400' : 'text-gray-400'}>
-            {item.isActive ? 'Active' : 'Inactive'}
+          <span className={item.is_active ? 'text-green-400' : 'text-gray-400'}>
+            {item.is_active ? 'Active' : 'Inactive'}
           </span>
         </button>
       ),
       sortable: true,
     },
     {
-      key: 'triggeredCount' as keyof ResponseRule,
+      key: 'triggered_count' as keyof ResponseRule,
       header: 'Triggered',
-      render: (item: ResponseRule) => `${item.triggeredCount} times`,
+      render: (item: ResponseRule) => `${item.triggered_count} times`,
       sortable: true,
     },
     {
-      key: 'createdAt' as keyof ResponseRule,
+      key: 'created_at' as keyof ResponseRule,
       header: 'Created',
-      render: (item: ResponseRule) => format(item.createdAt, 'MMM dd, yyyy'),
+      render: (item: ResponseRule) => format(new Date(item.created_at), 'MMM dd, yyyy'),
       sortable: true,
     },
     {
@@ -128,9 +154,9 @@ export const AutomatedResponse: React.FC = () => {
             onClick={() => handleRollback(item.id)}
             className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
             title="Rollback Actions"
-            disabled={item.triggeredCount === 0}
+            disabled={item.triggered_count === 0}
           >
-            <RotateCcw className={`h-4 w-4 ${item.triggeredCount === 0 ? 'opacity-50' : ''}`} />
+            <RotateCcw className={`h-4 w-4 ${item.triggered_count === 0 ? 'opacity-50' : ''}`} />
           </button>
         </div>
       ),

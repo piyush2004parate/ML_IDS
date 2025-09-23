@@ -1,8 +1,8 @@
 export interface NetworkTraffic {
   id: string;
   timestamp: Date;
-  sourceIp: string;
-  destinationIp: string;
+  source_ip: string;
+  destination_ip: string;
   protocol: string;
   bytes: number;
   status: 'Normal' | 'Anomalous' | 'Blocked';
@@ -12,9 +12,9 @@ export interface NetworkTraffic {
 export interface ThreatIncident {
   id: string;
   timestamp: Date;
-  sourceIp: string;
-  destinationIp: string;
-  threatType: 'Malware' | 'Phishing' | 'Anomaly' | 'Encrypted Threats' | 'DDoS' | 'Port Scan';
+  source_ip: string;
+  destination_ip: string;
+  threat_type: 'Malware' | 'Phishing' | 'Anomaly' | 'Encrypted Threats' | 'DDoS' | 'Port Scan';
   severity: 'Low' | 'Medium' | 'High' | 'Critical';
   status: 'Active' | 'Blocked' | 'Investigating' | 'Resolved' | 'False Positive';
   description: string;
@@ -33,9 +33,9 @@ export interface ResponseRule {
   name: string;
   condition: string;
   action: 'Block IP' | 'Isolate Device' | 'Alert Admin' | 'Quarantine';
-  isActive: boolean;
-  createdAt: Date;
-  triggeredCount: number;
+  is_active: boolean;
+  created_at: Date;
+  triggered_count: number;
 }
 
 export interface LogEntry {

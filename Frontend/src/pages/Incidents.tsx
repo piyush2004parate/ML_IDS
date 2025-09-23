@@ -8,16 +8,14 @@ import { Eye, Shield, Ban, CheckCircle } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 
 export const Incidents: React.FC = () => {
-  // Initialize state with an empty array
   const [incidents, setIncidents] = useState<ThreatIncident[]>([]);
   const [selectedIncident, setSelectedIncident] = useState<ThreatIncident | null>(null);
   const { showToast } = useToast();
 
-  // Fetch data from the Django API when the component mounts
   useEffect(() => {
     const fetchIncidents = async () => {
       try {
-        const response = await axios.get('http://127.0.0.1:8000/api/incidents/');
+        const response = await axios.get<ThreatIncident[]>('http://127.0.0.1:8000/api/incidents/');
         setIncidents(response.data);
       } catch (error) {
         console.error("Failed to fetch incidents:", error);
@@ -61,7 +59,6 @@ export const Incidents: React.FC = () => {
 
   const handleUpdateIncidentStatus = async (incident: ThreatIncident, status: string) => {
     try {
-      // Note: Make sure your API endpoint is correct for updating an incident
       await axios.patch(`http://127.0.0.1:8000/api/incidents/${incident.id}/`, { status });
       setIncidents(prev =>
         prev.map(i =>
@@ -75,16 +72,14 @@ export const Incidents: React.FC = () => {
     }
   };
 
-
   const handleBlockIp = (incident: ThreatIncident) => {
     handleUpdateIncidentStatus(incident, 'Blocked');
-    showToast('success', `IP ${incident.sourceIp} has been blocked`);
+    showToast('success', `IP ${incident.source_ip} has been blocked`);
   };
 
   const handleIsolateDevice = (incident: ThreatIncident) => {
-    // In a real scenario, this would also trigger a backend action.
-    handleUpdateIncidentStatus(incident, 'Blocked'); // Assuming 'Blocked' is the status for isolated devices
-    showToast('success', `Device ${incident.sourceIp} has been isolated`);
+    handleUpdateIncidentStatus(incident, 'Blocked');
+    showToast('success', `Device ${incident.source_ip} has been isolated`);
   };
 
   const handleMarkFalsePositive = (incident: ThreatIncident) => {

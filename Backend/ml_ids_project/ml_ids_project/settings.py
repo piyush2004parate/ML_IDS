@@ -26,9 +26,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'corsheaders',
+    'daphne',
     'django.contrib.staticfiles',
     'rest_framework',
     'api',
+    'channels',
 ]
 
 # CORRECTED MIDDLEWARE SECTION
@@ -120,3 +122,25 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+# Channels settings
+ASGI_APPLICATION = 'ml_ids_project.asgi.application'
+
+# You will need a channel layer for a real-world application,
+# but for a simple demo, a simple in-memory channel layer is sufficient.
+# You can install and configure Redis for a production environment.
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
+}
+
+# Add '127.0.0.1:5173' or your frontend URL to allowed hosts
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+
+# Add frontend host to CORS_ALLOWED_ORIGINS
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
