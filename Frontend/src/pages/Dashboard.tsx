@@ -1,9 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, BarChart, Bar, ResponsiveContainer } from 'recharts';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  ResponsiveContainer,
+} from 'recharts';
 import { MetricCard } from '../components/UI/MetricCard';
 import { Package, Shield, Ban, AlertTriangle } from 'lucide-react';
 import { ThreatIncident, NetworkTraffic } from '../types';
+import { useToast } from '../hooks/useToast';
 
 type ProtocolDataItem = {
   name: string;
@@ -11,7 +25,17 @@ type ProtocolDataItem = {
   color: string;
 };
 
+const protocolColors: { [key: string]: string } = {
+  TCP: '#00F5FF',
+  UDP: '#FF6B35',
+  ICMP: '#FFD700',
+  HTTP: '#8A2BE2',
+  FTP: '#32CD32',
+  Other: '#A9A9A9',
+};
+
 export const Dashboard: React.FC = () => {
+  const { showToast } = useToast();
   const [metrics, setMetrics] = useState({
     totalPackets: 0,
     activeThreats: 0,
@@ -22,76 +46,97 @@ export const Dashboard: React.FC = () => {
   const [protocolData, setProtocolData] = useState<ProtocolDataItem[]>([]);
   const [threatData, setThreatData] = useState<{ name: string; count: number }[]>([]);
 
-  useEffect(() => {
-    const fetchMetrics = async () => {
-      try {
-        const incidentsResponse = await axios.get<ThreatIncident[]>('http://127.0.0.1:8000/api/incidents/');
-        const trafficResponse = await axios.get<NetworkTraffic[]>('http://127.0.0.1:8000/api/traffic/');
-        
-        const activeThreats = incidentsResponse.data.filter(i => i.status === 'Active').length;
-        const blockedIps = incidentsResponse.data.filter(i => i.status === 'Blocked').length;
-        const falsePositives = incidentsResponse.data.filter(i => i.status === 'False Positive').length;
-        
-        const protocolCounts = trafficResponse.data.reduce((acc: { [key: string]: number }, curr) => {
-          acc[curr.protocol] = (acc[curr.protocol] || 0) + 1;
-          return acc;
-        }, {} as { [key: string]: number });
-        
-        const threatCounts = incidentsResponse.data.reduce((acc: Record<string, number>, curr) => {
-          acc[curr.threat_type] = (acc[curr.threat_type] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
+  const fetchData = useCallback(async () => {
+    try {
+      const incidentsResponse = await axios.get<ThreatIncident[]>('http://127.0.0.1:8000/api/incidents/');
+      const trafficResponse = await axios.get<NetworkTraffic[]>('http://127.0.0.1:8000/api/traffic/?limit=1000');
 
-        setMetrics({
-          totalPackets: trafficResponse.data.length,
-          activeThreats,
-          blockedIps,
-          falsePositives,
-        });
+      const incidents = incidentsResponse.data;
+      const traffic = trafficResponse.data;
 
-        const protocols = Object.keys(protocolCounts).map(key => ({
-          name: key,
-          value: protocolCounts[key],
-          color: '#' + Math.floor(Math.random()*16777215).toString(16),
-        }));
-        setProtocolData(protocols);
+      // 1. Calculate Metrics
+      const activeThreats = incidents.filter(i => i.status === 'Active').length;
+      const blockedIps = incidents.filter(i => i.status === 'Blocked').length;
+      const falsePositives = incidents.filter(i => i.status === 'False Positive').length;
 
-        const threats = Object.keys(threatCounts).map(key => ({
-          name: key,
-          count: threatCounts[key],
-        }));
-        setThreatData(threats);
+      setMetrics({
+        totalPackets: traffic.length,
+        activeThreats,
+        blockedIps,
+        falsePositives,
+      });
 
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
+      // 2. Process data for charts
+      // Threat Categories Chart
+      const threatCounts = incidents.reduce((acc: Record<string, number>, curr) => {
+        acc[curr.threat_type] = (acc[curr.threat_type] || 0) + 1;
+        return acc;
+      }, {});
+      setThreatData(Object.keys(threatCounts).map(key => ({ name: key, count: threatCounts[key] })));
+      
+      // Protocol Distribution Chart
+      const protocolCounts = traffic.reduce((acc: { [key: string]: number }, curr) => {
+        const protocol = protocolColors[curr.protocol] ? curr.protocol : 'Other';
+        acc[protocol] = (acc[protocol] || 0) + 1;
+        return acc;
+      }, {});
+      setProtocolData(Object.keys(protocolCounts).map(key => ({
+        name: key,
+        value: protocolCounts[key],
+        color: protocolColors[key],
+      })));
+
+      // Live Traffic Chart (last 24 hours)
+      const now = new Date();
+      const trafficByHour: { [hour: string]: { hour: string; packets: number; threats: number } } = {};
+
+      for (let i = 23; i >= 0; i--) {
+        const date = new Date(now.getTime() - i * 60 * 60 * 1000);
+        const hourKey = `${date.getHours().toString().padStart(2, '0')}:00`;
+        trafficByHour[hourKey] = { hour: hourKey, packets: 0, threats: 0 };
       }
-    };
-    
-    // Simulate live traffic for the chart
-    const generateTrafficData = () => {
-        // You would fetch this from the API in a real scenario
-        return Array.from({ length: 24 }, (_, i) => ({
-          hour: `${i.toString().padStart(2, '0')}:00`,
-          packets: Math.floor(Math.random() * 5000) + 1000,
-          threats: Math.floor(Math.random() * 100) + 10,
-        }));
-    };
-    
-    setTrafficData(generateTrafficData());
 
-    // Fetch data initially and then refresh periodically
-    fetchMetrics();
-    const intervalId = setInterval(fetchMetrics, 10000); // Refresh every 10 seconds
+      traffic.forEach(packet => {
+        const packetDate = new Date(packet.timestamp);
+        if (now.getTime() - packetDate.getTime() < 24 * 60 * 60 * 1000) {
+          const hourKey = `${packetDate.getHours().toString().padStart(2, '0')}:00`;
+          if (trafficByHour[hourKey]) {
+            trafficByHour[hourKey].packets += 1;
+          }
+        }
+      });
 
-    return () => clearInterval(intervalId);
-  }, []);
+      incidents.forEach(incident => {
+        const incidentDate = new Date(incident.timestamp);
+        if (now.getTime() - incidentDate.getTime() < 24 * 60 * 60 * 1000) {
+          const hourKey = `${incidentDate.getHours().toString().padStart(2, '0')}:00`;
+          if (trafficByHour[hourKey]) {
+            trafficByHour[hourKey].threats += 1;
+          }
+        }
+      });
+      
+      setTrafficData(Object.values(trafficByHour));
+
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+      showToast('error', 'Could not refresh dashboard data.');
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    fetchData(); // Fetch data initially
+    const intervalId = setInterval(fetchData, 10000); // Refresh every 10 seconds
+
+    return () => clearInterval(intervalId); // Cleanup on unmount
+  }, [fetchData]);
 
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
-          title="Total Packets"
+          title="Total Packets (1k)"
           value={metrics.totalPackets.toLocaleString()}
           icon={Package}
           color="cyan"
@@ -137,15 +182,15 @@ export const Dashboard: React.FC = () => {
                 dataKey="packets"
                 stroke="#00F5FF"
                 strokeWidth={2}
-                dot={{ fill: '#00F5FF', strokeWidth: 2, r: 4 }}
-                name="Packets/sec"
+                dot={false}
+                name="Packets"
               />
               <Line
                 type="monotone"
                 dataKey="threats"
                 stroke="#FF6B35"
                 strokeWidth={2}
-                dot={{ fill: '#FF6B35', strokeWidth: 2, r: 4 }}
+                dot={false}
                 name="Threats"
               />
             </LineChart>
@@ -164,6 +209,7 @@ export const Dashboard: React.FC = () => {
                 outerRadius={120}
                 paddingAngle={5}
                 dataKey="value"
+                nameKey="name"
               >
                 {protocolData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
@@ -186,7 +232,7 @@ export const Dashboard: React.FC = () => {
                   className="w-3 h-3 rounded-full mr-2"
                   style={{ backgroundColor: entry.color }}
                 />
-                <span className="text-sm text-gray-300">{entry.name}</span>
+                <span className="text-sm text-gray-300">{entry.name} ({entry.value})</span>
               </div>
             ))}
           </div>
@@ -207,6 +253,7 @@ export const Dashboard: React.FC = () => {
                 borderRadius: '8px',
                 color: '#F3F4F6'
               }}
+              formatter={(value) => [value, 'Count']}
             />
             <Bar dataKey="count" fill="#00F5FF" radius={[4, 4, 0, 0]} />
           </BarChart>

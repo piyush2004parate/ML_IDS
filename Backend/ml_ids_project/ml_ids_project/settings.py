@@ -14,7 +14,8 @@ SECRET_KEY = 'django-insecure-@z%z$n73*_(^vw9%ynsu_01wc34w%uag5t0lhl#mpgca+*wp!%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# Allow all hosts for development purposes
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -31,12 +32,14 @@ INSTALLED_APPS = [
     'rest_framework',
     'api',
     'channels',
+    'whitenoise.runserver_nostatic',
 ]
 
 # CORRECTED MIDDLEWARE SECTION
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # Make sure this is high up
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -111,17 +114,16 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ADD THIS SECTION AT THE END
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 
 # Channels settings
 ASGI_APPLICATION = 'ml_ids_project.asgi.application'
@@ -135,12 +137,8 @@ CHANNEL_LAYERS = {
     }
 }
 
-# Add '127.0.0.1:5173' or your frontend URL to allowed hosts
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
-
-# Add frontend host to CORS_ALLOWED_ORIGINS
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
